@@ -48,7 +48,7 @@ Whitespace is automatically removed.
 
 Execute the script with superuser privileges:
 
-sudo ./create_users.sh users.txt
+sudo ./create_users.sh employees.txt
 
 # Outputs
 
