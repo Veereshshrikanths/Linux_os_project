@@ -12,13 +12,14 @@ log_message() {
 }
 
 # Function to generate a random password
+# Note: The password will only contain alphanumeric characters and the symbols @#$% to avoid shell or system issues.
 generate_password() {
-    tr -dc 'A-Za-z0-9!@#$%^&*()-_' < /dev/urandom | head -c 16
+    tr -dc 'A-Za-z0-9@#$%' < /dev/urandom | head -c 16
 }
 
 if [ ! -d "$SECURE_FOLDER" ]; then
     # Check if the secure folder exists, if not, create it
-    mkdir -p $SECURE_FOLDER
+    mkdir -p "$SECURE_FOLDER"
     log_message "Secure folder created."
 fi
 
@@ -37,21 +38,20 @@ if [ ! -f "$USER_FILE" ]; then
 fi
 
 # Create the log file and password file if they do not exist
-touch $LOG_FILE
-touch $PASSWORD_FILE
+touch "$LOG_FILE"
+touch "$PASSWORD_FILE"
 
 # Set the permissions on the password file to be read/write only by the user executing the script
-chmod 600 $PASSWORD_FILE
+chmod 600 "$PASSWORD_FILE"
 
 # Write the header to the password file if it is empty
-if [ ! -s $PASSWORD_FILE ]; then
-    echo "Username,Password" > $PASSWORD_FILE
+if [ ! -s "$PASSWORD_FILE" ]; then
+    echo "Username,Password" > "$PASSWORD_FILE"
 fi
 
-# Add new line to USER_FILE to avoid error in while loop
-echo "" >> $USER_FILE
+# No need to append a blank line to USER_FILE; the while loop already skips empty lines
 
-# read one by one, there is no seperator so it will read line by line
+# Read the user file line by line; each line should be in the format: username;group1,group2
 while read -r line; do
     # Trim whitespace, and seperate them via ;
     username=$(echo "$line" | xargs | cut -d';' -f1)
@@ -71,14 +71,20 @@ while read -r line; do
     fi
 
     # Create user if not exists
-    if ! id -u "$username" > /dev/null 2>&1; then
-        useradd -m -g "$username" -s /bin/bash "$username"
+    # Validate username: must be 1-32 chars, start with a letter, and contain only letters, digits, underscores, or dashes
+    if [[ ! "$username" =~ ^[a-zA-Z][a-zA-Z0-9_-]{0,31}$ ]]; then
+        log_message "Invalid username '$username'. Skipping user creation."
+        continue
+        # Generate and set password, filter out problematic characters
+        password=$(generate_password | tr -d ':\n')
+        echo "$username:$password" | chpasswd
+        echo "$username,$password" >> "$PASSWORD_FILE"
+        log_message "Password set for user '$username'."
         log_message "User '$username' created with home directory."
-
         # Generate and set password
         password=$(generate_password)
         echo "$username:$password" | chpasswd
-        echo "$username,$password" >> $PASSWORD_FILE
+        echo "$username,$password" >> "$PASSWORD_FILE"
         log_message "Password set for user '$username'."
 
         # Set permissions for home directory
@@ -89,8 +95,8 @@ while read -r line; do
         log_message "User '$username' already exists."
     fi
 
-    # Add user to additional groups
-    IFS=',' read -ra group_array <<< "$groups"
+    if [ -n "$groups" ]; then
+        IFS=',' read -ra group_array <<< "$groups"
         for group in "${group_array[@]}"; do
             group=$(echo "$group" | xargs) # Trim whitespace
             if [ -n "$group" ]; then
@@ -101,5 +107,7 @@ while read -r line; do
                 usermod -aG "$group" "$username"
                 log_message "User '$username' added to group '$group'."
             fi
+        done
+    fi
     done
-done < "$USER_FILE"
+done < "${USER_FILE}"

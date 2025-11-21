@@ -21,7 +21,7 @@ It reads a text file containing usernames and group memberships, then automatica
 Clone or copy the script to your Linux system:
 
 git clone https://github.com/Veereshshrikanths/Linux_os_project.git
-cd user-management
+cd Linux_Os_projects
 
 
 Make the script executable:
